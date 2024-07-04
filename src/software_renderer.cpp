@@ -242,8 +242,96 @@ void SoftwareRendererImp::rasterize_line( float x0, float y0,
                                           float x1, float y1,
                                           Color color) {
 
-  // Task 2: 
-  // Implement line rasterization
+    // Task 2: 
+    bool isIncreasingByX = true;
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    if (x0 < x1
+        && (((dy / dx) <= 1 && (dy / dx) >= 0)   //octant 1 clock wise
+            || ((dy / dx) <= 0 && (dy / dx) >= -1)  //octant 2 clock wise
+            )
+        )
+    {
+        isIncreasingByX = true;
+    }
+    else if (x1 < x0
+        && (((dy / dx) <= 1 && (dy / dx) >= 0)   //octant 5 clock wise
+            || ((dy / dx) <= 0 && (dy / dx) >= -1)  //octant 6 clock wise
+            )
+        )
+    {
+        isIncreasingByX = true;
+        swap(x0, x1);
+        swap(y0, y1);
+    }
+    else if (y0 < y1
+        && ((dy / dx) > 1       //octant 4 clock wise
+            || (dy / dx) < -1   //octant 3 clock wise
+            )
+        )
+    {
+        isIncreasingByX = false;
+        swap(x0, y0);
+        swap(x1, y1);
+    }
+    else if (y1 < y0
+        && ((dy / dx) > 1       //octant 7 clock wise
+            || (dy / dx) < -1   //octant 8 clock wise
+            )
+        )
+    {
+        isIncreasingByX = false;
+        swap(x0, y0);
+        swap(x1, y1);
+
+        swap(x0, x1);
+        swap(y0, y1);
+    }
+
+    dx = x1 - x0;
+    dy = y1 - y0;
+    float eps = 0;
+    int sy = int(floor(y0));
+
+    for (int x = int(floor(x0)); x < int(floor(x1)); ++x)
+    {
+        if (isIncreasingByX == false)
+        {
+            swap(x, sy);
+        }
+        // check bounds
+        if (x < 0 || x >= target_w) return;
+        if (sy < 0 || sy >= target_h) return;
+
+        // fill sample - NOT doing alpha blending!
+        render_target[4 * (x + sy * target_w)] = (uint8_t)(color.r * 255);
+        render_target[4 * (x + sy * target_w) + 1] = (uint8_t)(color.g * 255);
+        render_target[4 * (x + sy * target_w) + 2] = (uint8_t)(color.b * 255);
+        render_target[4 * (x + sy * target_w) + 3] = (uint8_t)(color.a * 255);
+        if (isIncreasingByX == false)
+        {
+            swap(x, sy);
+        }
+
+        if ((dx != 0 && dy/dx >= 0) || dx == 0)
+        {
+            eps += dy;
+            if ((eps * 2) >= dx)
+            {
+                sy++;
+                eps -= dx;
+            }
+        }
+        else
+        {
+            eps = eps + dy;
+            if ((eps*2) <= dx)
+            {
+                sy = floor(sy - 1);
+                eps += dx;
+            }
+        }
+    }
 }
 
 void SoftwareRendererImp::rasterize_triangle( float x0, float y0,
