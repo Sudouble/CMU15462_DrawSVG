@@ -334,13 +334,55 @@ void SoftwareRendererImp::rasterize_line( float x0, float y0,
     }
 }
 
+bool IsPointInTriangle(float px, float py,
+    float x0, float y0,
+    float x1, float y1,
+    float x2, float y2)
+
+{
+    // https://blog.csdn.net/weixin_39872717/article/details/77368234
+    // https://blog.csdn.net/weixin_44120025/article/details/123830197
+    float AB_x = (x1 - x0); float AB_y = (y1 - y0);
+    float BC_x = (x2 - x1); float BC_y = (y2 - y1);
+    float CA_x = (x0 - x2); float CA_y = (y0 - y2);
+
+    float AP_x = (px - x0); float AP_y = py - y0;
+    float BP_x = px - x1; float BP_y = py - y1;
+    float CP_x = px - x2; float CP_y = py - y2;
+
+    bool isCounterClock = ((AB_x * BC_y - BC_x * AB_y) > 0);
+    //std::cout << "isCounterClock: " << isCounterClock << std::endl;
+    float AB_AP = AB_x * AP_y - AB_y * AP_x;
+    float BC_BP = BC_x * BP_y - BC_y * BP_x;
+    float CA_CP = CA_x * CP_y - CA_y * CP_x;
+    //std::cout << AB_AP << " " << BC_BP << " " << CA_CP << std::endl;
+    if ((isCounterClock && AB_AP > 0 && BC_BP > 0 && CA_CP > 0)
+        || (!isCounterClock && AB_AP < 0 && BC_BP < 0 && CA_CP < 0)
+        || fabs(AB_AP * BC_BP * CA_CP) < 0.0001)
+    {
+        return true;
+    }
+    return false;
+}
+
 void SoftwareRendererImp::rasterize_triangle( float x0, float y0,
                                               float x1, float y1,
                                               float x2, float y2,
                                               Color color ) {
-  // Task 3: 
-  // Implement triangle rasterization
+    // Task 3: 
+    size_t left = floor(min({ x0,x1,x2 }));
+    size_t right = ceil(std::max({ x0, x1, x2 }));
+    size_t bottom = floor(min({ y0,y1,y2 }));
+    size_t top = ceil(std::max({ y0,y1,y2 }));
 
+    for (float x = left; x <= right; x++) {
+        for (float y = bottom; y <= top; y++) {
+            if (IsPointInTriangle(x, y, x0, y0, x1, y1, x2, y2))
+            {
+                rasterize_point(x, y, color);
+            }
+        }
+    }
 }
 
 void SoftwareRendererImp::rasterize_image( float x0, float y0,
