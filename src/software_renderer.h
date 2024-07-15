@@ -133,6 +133,9 @@ class SoftwareRendererImp : public SoftwareRenderer {
   // resolve samples to render target
   void resolve( void );
 
+  std::vector<float> sample_buffer; int w; int h;
+  CMU462::Matrix3x3 screen_to_buffer = CMU462::Matrix3x3::identity();
+
 }; // class SoftwareRendererImp
 
 

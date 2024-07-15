@@ -15,9 +15,12 @@ namespace CMU462 {
 // Implements SoftwareRenderer //
 
 void SoftwareRendererImp::draw_svg( SVG& svg ) {
+    
 
   // set top level transformation
-  transformation = svg_2_screen;
+  transformation = screen_to_buffer * svg_2_screen;
+  
+  std::fill(this->sample_buffer.begin(), this->sample_buffer.end(), 0);
 
   // draw all elements
   for ( size_t i = 0; i < svg.elements.size(); ++i ) {
@@ -45,7 +48,13 @@ void SoftwareRendererImp::set_sample_rate( size_t sample_rate ) {
   // Task 4: 
   // You may want to modify this for supersampling support
   this->sample_rate = sample_rate;
+  screen_to_buffer = CMU462::Matrix3x3::identity();
+  screen_to_buffer(0, 0) = sample_rate;
+  screen_to_buffer(1, 1) = sample_rate;
 
+  this->h = this->sample_rate * this->target_h;
+  this->w = this->sample_rate * this->target_w;
+  this->sample_buffer.resize(4 * (this->h * this->w));
 }
 
 void SoftwareRendererImp::set_render_target( unsigned char* render_target,
@@ -57,6 +66,9 @@ void SoftwareRendererImp::set_render_target( unsigned char* render_target,
   this->target_w = width;
   this->target_h = height;
 
+  this->h = this->sample_rate * this->target_h;
+  this->w = this->sample_rate * this->target_w;
+  this->sample_buffer.resize(4 * (this->h * this->w));
 }
 
 void SoftwareRendererImp::draw_element( SVGElement* element ) {
@@ -219,7 +231,6 @@ void SoftwareRendererImp::draw_group( Group& group ) {
 
 // The input arguments in the rasterization functions 
 // below are all defined in screen space coordinates
-
 void SoftwareRendererImp::rasterize_point( float x, float y, Color color ) {
 
   // fill in the nearest pixel
@@ -227,15 +238,21 @@ void SoftwareRendererImp::rasterize_point( float x, float y, Color color ) {
   int sy = (int) floor(y);
 
   // check bounds
-  if ( sx < 0 || sx >= target_w ) return;
-  if ( sy < 0 || sy >= target_h ) return;
+  if ( sx < 0 || sx >= w ) return;
+  if ( sy < 0 || sy >= h ) return;
 
   // fill sample - NOT doing alpha blending!
-  render_target[4 * (sx + sy * target_w)    ] = (uint8_t) (color.r * 255);
-  render_target[4 * (sx + sy * target_w) + 1] = (uint8_t) (color.g * 255);
-  render_target[4 * (sx + sy * target_w) + 2] = (uint8_t) (color.b * 255);
-  render_target[4 * (sx + sy * target_w) + 3] = (uint8_t) (color.a * 255);
-
+  for (int ki = (1 - int(sample_rate)) / 2; ki <= int(sample_rate) / 2; ki++) {
+      for (int kj = (1 - int(sample_rate)) / 2; kj <= int(sample_rate) / 2; kj++)
+      {
+          int x = clamp<int>(sx + ki, 0, w - 1);
+          int y = clamp<int>(sy + kj, 0, h - 1);
+          sample_buffer[4 * (x + y * w) + 0] = (uint8_t)(color.r * 255);
+          sample_buffer[4 * (x + y * w) + 1] = (uint8_t)(color.g * 255);
+          sample_buffer[4 * (x + y * w) + 2] = (uint8_t)(color.b * 255);
+          sample_buffer[4 * (x + y * w) + 3] = (uint8_t)(color.a * 255);
+      }
+  }
 }
 
 void SoftwareRendererImp::rasterize_line( float x0, float y0,
@@ -299,15 +316,7 @@ void SoftwareRendererImp::rasterize_line( float x0, float y0,
         {
             swap(x, sy);
         }
-        // check bounds
-        if (x < 0 || x >= target_w) return;
-        if (sy < 0 || sy >= target_h) return;
-
-        // fill sample - NOT doing alpha blending!
-        render_target[4 * (x + sy * target_w)] = (uint8_t)(color.r * 255);
-        render_target[4 * (x + sy * target_w) + 1] = (uint8_t)(color.g * 255);
-        render_target[4 * (x + sy * target_w) + 2] = (uint8_t)(color.b * 255);
-        render_target[4 * (x + sy * target_w) + 3] = (uint8_t)(color.a * 255);
+        rasterize_point(x, sy, color);
         if (isIncreasingByX == false)
         {
             swap(x, sy);
@@ -395,11 +404,37 @@ void SoftwareRendererImp::rasterize_image( float x0, float y0,
 
 // resolve samples to render target
 void SoftwareRendererImp::resolve( void ) {
-
   // Task 4: 
   // Implement supersampling
   // You may also need to modify other functions marked with "Task 4".
-  return;
+    // fill in the nearest pixel
+    for (size_t i = 0; i < target_h; i++) {
+        for (size_t j = 0; j < target_w; j++) {
+            CMU462::Color color(0, 0, 0, 0);
+            for (size_t ki = 0; ki < sample_rate; ki++) {
+                for (size_t kj = 0; kj < sample_rate; kj++) {
+                    size_t idx = (i * sample_rate + ki) * target_w * sample_rate * 4 + (j * sample_rate + kj) * 4;
+                    float r = sample_buffer[idx + 0];
+                    float g = sample_buffer[idx + 1];
+                    float b = sample_buffer[idx + 2];
+                    float a = sample_buffer[idx + 3];
+                    color += CMU462::Color(r, g, b, a);
+                }
+            }
+            color *= 1.0f / (sample_rate * sample_rate);
+            size_t idx = 4 * (i * target_w + j);
+            if (color.a != 0) {
+                color.r *= 1.0 / color.a * 255.0f;
+                color.g *= 1.0 / color.a * 255.0f;
+                color.b *= 1.0 / color.a * 255.0f;
+            }
+
+            render_target[idx + 0] = color.r;
+            render_target[idx + 1] = color.g;
+            render_target[idx + 2] = color.b;
+            render_target[idx + 3] = color.a;
+        }
+    }
 
 }
 
