@@ -400,7 +400,15 @@ void SoftwareRendererImp::rasterize_image( float x0, float y0,
                                            Texture& tex ) {
   // Task 6: 
   // Implement image rasterization
-
+    for (float x = floor(x0 + 0.5) + 0.5; x <= x1; x++) {
+        for (float y = floor(y0 + 0.5) + 0.5; y <= y1; y++) {
+            float u = (x - x0) / (x1 - x0);
+            float v = (y - y0) / (y1 - y0);
+            //CMU462::Color color = sampler->sample_nearest(tex, u, v, 0);
+            CMU462::Color color = sampler->sample_bilinear(tex, u, v, 0);
+            rasterize_point(x, y, color);
+        }
+    }
 }
 
 // resolve samples to render target

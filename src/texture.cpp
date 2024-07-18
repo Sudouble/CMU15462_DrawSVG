@@ -83,10 +83,20 @@ Color Sampler2DImp::sample_nearest(Texture& tex,
                                    int level) {
 
   // Task 6: Implement nearest neighbour interpolation
-  
   // return magenta for invalid level
-  return Color(1,0,1,1);
+  if (level >=tex.mipmap.size())
+  {
+      return Color(1, 0, 1, 1);
+  }
 
+  size_t x = clamp<float>(u, 0, 0.999999f) * tex.mipmap[level].width;
+  size_t y = clamp<float>(v, 0, 0.999999f) * tex.mipmap[level].height;
+  size_t idx = 4 * (y * tex.mipmap[level].width + x);
+  float r = tex.mipmap[level].texels[idx + 0] / 255.0f;
+  float g = tex.mipmap[level].texels[idx + 1] / 255.0f;
+  float b = tex.mipmap[level].texels[idx + 2] / 255.0f;
+  float a = tex.mipmap[level].texels[idx + 3] / 255.0f;
+  return Color(r, g, b, a);
 }
 
 Color Sampler2DImp::sample_bilinear(Texture& tex, 
@@ -96,8 +106,35 @@ Color Sampler2DImp::sample_bilinear(Texture& tex,
   // Task 6: Implement bilinear filtering
 
   // return magenta for invalid level
-  return Color(1,0,1,1);
+    if (level >= tex.mipmap.size())
+    {
+        return Color(1, 0, 1, 1);
+    }
 
+    size_t i = floor(u * tex.mipmap[level].width) - 0.5;
+    size_t j = floor(v * tex.mipmap[level].height) - 0.5;
+
+    size_t x = clamp<float>(u, 0, 0.999999f) * tex.mipmap[level].width;
+    size_t y = clamp<float>(v, 0, 0.999999f) * tex.mipmap[level].height;
+
+    float s = x - (i + 0.5);
+    float t = y - (j + 0.5);
+
+    size_t idx_00 = 4 * (j * tex.mipmap[level].width + i);
+    size_t idx_01 = 4 * ((j + 1) * tex.mipmap[level].width + i);
+    size_t idx_11 = 4 * ((j + 1) * tex.mipmap[level].width + i + 1);
+    size_t idx_10 = 4 * (j * tex.mipmap[level].width + i + 1);
+    float result[4] = { 0 };
+    for (int color = 0; color < 4; color++)
+    {
+        auto f00 = tex.mipmap[level].texels[idx_00 + color];
+        auto f10 = tex.mipmap[level].texels[idx_10 + color];
+        auto f01 = tex.mipmap[level].texels[idx_01 + color];
+        auto f11 = tex.mipmap[level].texels[idx_11 + color];
+        result[color] = (1 - t) * ((1 - s) * f00 + s *f10) + t * ((1 - s) * f01 + s * f11);
+        result[color] /= 255.0f;
+    }
+    return Color(result[0], result[1], result[2], result[3]);
 }
 
 Color Sampler2DImp::sample_trilinear(Texture& tex, 
